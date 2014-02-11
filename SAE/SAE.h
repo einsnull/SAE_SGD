@@ -30,14 +30,13 @@ double logScalar(double x)
 // sparse auto encoder class
 class SAE
 {
-public:
+private:
 	//weights
 	MatrixXd theta1;
 	MatrixXd theta2;
 	//bias
 	MatrixXd b1;
 	MatrixXd b2;
-private:
 	int inputSize;
 	int hiddenSize;
 public:
@@ -48,15 +47,15 @@ public:
 		int trainMode,void *option);
 	bool saveModel(char *szFileName);
 	bool loadModel(char *szFileName);
+	MatrixXd getTheta();
+	MatrixXd getBias();
+	
 private:
 	MatrixXd reciprocal(MatrixXd &z);
 	MatrixXd randomInitialize(int lIn,int lOut);
 	inline MatrixXd sigmoid(MatrixXd &z);
 	MatrixXd SAE::sigmoidGradient(MatrixXd &z);
 	inline MatrixXd logMat(MatrixXd &z);
-	double computeCost(MatrixXd &data,double lambda,MatrixXd &theta1Grad,
-		MatrixXd &theta2Grad,MatrixXd &b1Grad,MatrixXd &b2Grad,
-		double beta,double sparsityParam);
 	void updateParameters(
 		MatrixXd &theta1Grad1,MatrixXd &theta2Grad2,
 		MatrixXd &b1Grad,MatrixXd &b2Grad,double alpha);
@@ -64,6 +63,9 @@ private:
 		double lambda,double alpha,int maxIter,double beta,double sp);
 	void miniBatchSGD(MatrixXd &trainData,double lambda,
 		double alpha,int maxIter,int batchSize,double beta,double sp);
+	double computeCost(MatrixXd &data,double lambda,MatrixXd &theta1Grad,
+		MatrixXd &theta2Grad,MatrixXd &b1Grad,MatrixXd &b2Grad,
+		double beta,double sparsityParam);
 };
 
 //constructor
@@ -75,6 +77,16 @@ SAE::SAE(int inputSize,int hiddenSize)
 	theta2 = randomInitialize(inputSize,hiddenSize);
 	b1 = MatrixXd::Zero(hiddenSize,1);
 	b2 = MatrixXd::Zero(inputSize,1);
+}
+
+MatrixXd SAE::getTheta()
+{
+	return theta1;
+}
+
+MatrixXd SAE::getBias()
+{
+	return b1;
 }
 
 //return 1.0 ./ z
@@ -145,23 +157,22 @@ double SAE::computeCost(
 	int numOfExamples = data.cols();
 
 	MatrixXd a1 = data;
-	MatrixXd y = data;
 	
 	MatrixXd z2 = theta1 * data + b1.replicate(1,numOfExamples);
 	MatrixXd a2 = sigmoid(z2);
 	MatrixXd z3 = theta2 * a2 + b2.replicate(1,numOfExamples);
 	MatrixXd a3 = sigmoid(z3);
 	
-	MatrixXd rho = a2.rowwise().sum() * (1.0 / (double)numOfExamples);
+	MatrixXd rho = a2.rowwise().sum() *(1.0 / (double)numOfExamples);
 	double sp = sparsityParam;
 	MatrixXd term1 = MatrixXd::Ones(rho.rows(),rho.cols()) - rho;
 	MatrixXd spDelta = reciprocal(term1) * (1.0 - sp)
 		-  reciprocal(rho) * sp;
 	//compute delta
-	MatrixXd delta3 = (a3 - y).cwiseProduct(sigmoidGradient(z3));
+	MatrixXd delta3 = (a3 - data).cwiseProduct(sigmoidGradient(z3));
 
 	MatrixXd delta2 = (theta2.transpose() * delta3 
-		+ (spDelta.replicate(1,numOfExamples)).cwiseProduct(sigmoidGradient(z2)) * beta);
+		+ spDelta.replicate(1,numOfExamples)).cwiseProduct(sigmoidGradient(z2)) * beta;
 
 	//compute delta parameters
 	MatrixXd deltaTheta1 = delta2 * a1.transpose();
@@ -169,19 +180,20 @@ double SAE::computeCost(
 	MatrixXd deltaTheta2 = delta3 * a2.transpose();
 	MatrixXd deltaB2 = delta3.rowwise().sum();
 
-	theta2Grad = (deltaTheta2 / (double)numOfExamples) + (theta2 * lambda);
-	b2Grad = b2Grad / (double)numOfExamples;
-	theta1Grad = (deltaTheta1 / (double)numOfExamples) + (theta1 * lambda);
-	b1Grad = b1Grad / (double)numOfExamples;
+	theta2Grad = deltaTheta2 * (1.0 / (double)numOfExamples) + theta2 * lambda;
+	b2Grad = deltaB2 * (1.0 / (double)numOfExamples);
+	theta1Grad = deltaTheta1 * ( 1.0 / (double)numOfExamples) + theta1 * lambda;
+	b1Grad = deltaB1 * (1.0  / (double)numOfExamples);
 
 	MatrixXd term2 = reciprocal(rho) * sp;
 	MatrixXd term3 = reciprocal(term1) * (1.0 - sp);
 	//compute cost
-	double spCost = beta * (logMat(term2) * sp + logMat(term3) * (1.0 - sp)).array().sum();
+	double spCost = (logMat(term2) * sp + logMat(term3) * (1.0 - sp)).array().sum() * beta;
 	
-	double regCost = lambda * (theta1.array().sum() + theta2.array().sum());
+	double regCost = (theta1.array().square().sum()
+		+ theta2.array().square().sum()) * (lambda / 2.0);
 	
-	cost = (1.0 / numOfExamples) * 0.5 * (a3 - y).array().square().sum()
+	cost = (a3 - data).array().square().sum() * (1.0 / (numOfExamples * 2))
 		+ regCost + spCost;
 	return cost;
 }
@@ -265,6 +277,7 @@ void SAE::train(
 	if(trainData.rows() != this->inputSize)
 	{
 #ifdef _IOSTREAM_
+		cout << "TrainData rows:" << trainData.rows() << endl;
 		cout << "dimension mismatch!" << endl;
 #endif
 		return;
