@@ -170,13 +170,13 @@ void buildImage(MatrixXd &theta,int imgWidth,char* szFileName,bool showFlag,doub
 
 	if(showFlag)
 	{
-		cvNamedWindow("Image",CV_WINDOW_AUTOSIZE);
+		cvNamedWindow(szFileName,CV_WINDOW_AUTOSIZE);
 		IplImage* iplImageShow = cvCreateImage(
 			cvSize((int)(iplImage->width * ratio),(int)(iplImage->height * ratio)),IPL_DEPTH_8U,1);
 		cvResize(iplImage,iplImageShow,CV_INTER_CUBIC);
-		cvShowImage("Image",iplImageShow);
+		cvShowImage(szFileName,iplImageShow);
 		cvWaitKey(100000);
-		cvDestroyWindow("Image");
+		cvDestroyWindow(szFileName);
 		cvReleaseImage(&iplImageShow);
 	}
 	cvReleaseImage(&iplImage);
