@@ -163,7 +163,7 @@ double SAE::computeCost(
 	MatrixXd z3 = theta2 * a2 + b2.replicate(1,numOfExamples);
 	MatrixXd a3 = sigmoid(z3);
 	
-	MatrixXd rho = a2.rowwise().sum() *(1.0 / (double)numOfExamples);
+	MatrixXd rho = a2.rowwise().sum() * (1.0 / (double)numOfExamples);
 	double sp = sparsityParam;
 	MatrixXd term1 = MatrixXd::Ones(rho.rows(),rho.cols()) - rho;
 	MatrixXd spDelta = reciprocal(term1) * (1.0 - sp)
@@ -174,16 +174,14 @@ double SAE::computeCost(
 	MatrixXd delta2 = (theta2.transpose() * delta3 
 		+ spDelta.replicate(1,numOfExamples)).cwiseProduct(sigmoidGradient(z2)) * beta;
 
-	//compute delta parameters
-	MatrixXd deltaTheta1 = delta2 * a1.transpose();
-	MatrixXd deltaB1 = delta2.rowwise().sum();
-	MatrixXd deltaTheta2 = delta3 * a2.transpose();
-	MatrixXd deltaB2 = delta3.rowwise().sum();
+	//compute gradients
 
-	theta2Grad = deltaTheta2 * (1.0 / (double)numOfExamples) + theta2 * lambda;
-	b2Grad = deltaB2 * (1.0 / (double)numOfExamples);
-	theta1Grad = deltaTheta1 * ( 1.0 / (double)numOfExamples) + theta1 * lambda;
-	b1Grad = deltaB1 * (1.0  / (double)numOfExamples);
+	theta2Grad = delta3 * a2.transpose() * (1.0 / (double)numOfExamples)
+		+ theta2 * lambda;
+	b2Grad = delta3.rowwise().sum() * (1.0 / (double)numOfExamples);
+	theta1Grad = delta2 * a1.transpose() * ( 1.0 / (double)numOfExamples)
+		+ theta1 * lambda;
+	b1Grad = delta2.rowwise().sum() * (1.0  / (double)numOfExamples);
 
 	MatrixXd term2 = reciprocal(rho) * sp;
 	MatrixXd term3 = reciprocal(term1) * (1.0 - sp);
@@ -193,7 +191,7 @@ double SAE::computeCost(
 	double regCost = (theta1.array().square().sum()
 		+ theta2.array().square().sum()) * (lambda / 2.0);
 	
-	cost = (a3 - data).array().square().sum() * (1.0 / (numOfExamples * 2))
+	cost = (a3 - data).array().square().sum() * (1.0 / 2.0 / numOfExamples)
 		+ regCost + spCost;
 	return cost;
 }
